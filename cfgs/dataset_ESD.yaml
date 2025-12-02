@@ -1,0 +1,11 @@
+_target_: dataset.dataset_ESD.ESD_DataLoaders
+dataset_name: "ESD"
+path: "/home/zheyaogao/Experiments/ESD_seg/esd_seg+.npy"
+transforms:
+  _target_: dataset.dataset_ESD.prepare_transforms
+train_batch_size: 4
+test_batch_size: 4
+num_workers: 4
+num_classes: 4
+
+

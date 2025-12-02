@@ -1,0 +1,97 @@
+_target_: models.vss_base.base_model
+image_encoder:
+  _target_: models.encoder.SAM2_encoder
+  checkpoint_path: sam2/checkpoints/sam2.1_hiera_base_plus.pt
+  backbone: 
+    _target_: sam2.modeling.backbones.hieradet.Hiera
+    embed_dim: 112
+    num_heads: 2
+    stages: [2, 3, 16, 3]
+    global_att_blocks: [12, 16, 20]
+    window_pos_embed_bkg_spatial_size: [14, 14]
+    window_spec: [8, 4, 14, 7]
+
+local_memory:
+  _target_: models.memory.LocalMemoryModule
+  in_dim: 896
+  mem_dim: 64
+  local_filter:
+    _target_: models.memory.LocalFilter
+    similarity_metric: cosine
+    num_frames: 8
+  memory_attention:
+    _target_: models.memory.MemoryAttention
+    d_model: 256
+    layer:
+      _target_: sam2.modeling.memory_attention.MemoryAttentionLayer
+      activation: relu
+      dim_feedforward: 2048
+      dropout: 0.1
+      pos_enc_at_attn: false
+      self_attention:
+        _target_: sam2.modeling.sam.transformer.RoPEAttention
+        rope_theta: 10000.0
+        feat_sizes: [8, 8]
+        embedding_dim: 256
+        num_heads: 1
+        downsample_rate: 1
+        dropout: 0.1
+      d_model: 256
+      pos_enc_at_cross_attn_keys: false
+      pos_enc_at_cross_attn_queries: false
+      cross_attention:
+        _target_: sam2.modeling.sam.transformer.RoPEAttention
+        rope_theta: 10000.0
+        feat_sizes: [8, 8]
+        rope_k_repeat: True
+        embedding_dim: 256
+        num_heads: 1
+        downsample_rate: 1
+        dropout: 0.1
+        kv_in_dim: 64
+    num_layers: 2
+    d_feat: 896
+
+global_memory:
+  _target_: models.memory.GlobalMemoryModule
+  prior_encoder:
+    _target_: models.memory.PriorEncoder
+    in_dim: 896
+    d_latent: 16
+    num_clusters: 3
+  post_encoder:
+    _target_: models.memory.PostEncoder
+    in_dim: 896
+    embed_dim: 256
+    d_latent: 16
+    mask_downsampler:
+      _target_: models.memory.MaskDownSampler
+      mask_in_chans: 1 # Assuming single channel mask
+      embed_dim: 256
+      kernel_size: 3
+      stride: 2
+      padding: 1
+    fuser:
+      _target_: sam2.modeling.memory_encoder.Fuser
+      layer:
+        _target_: sam2.modeling.memory_encoder.CXBlock
+        dim: 256
+        kernel_size: 7
+        padding: 3
+        layer_scale_init_value: 1e-6
+        use_dwconv: True  # depth-wise convs
+      num_layers: 2
+
+mask_decoder:
+  _target_: models.decoder.SegFormerHead
+  num_classes: 7 
+  in_channels: [112, 224, 448, 896]
+  embedding_dim: 768
+
+loss:
+  _target_: models.loss.ELBoLoss
+  nll_loss:
+    _target_: torch.nn.functional.cross_entropy
+    _partial_: True
+  alpha: 0.01
+

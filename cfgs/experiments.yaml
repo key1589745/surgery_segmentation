@@ -1,0 +1,13 @@
+defaults:
+  - training@training
+  - evaluation@evaluation
+  - model@model
+  - dataset_ESD@dataloaders
+  - _self_
+
+runner:
+  _target_: runner.BaseMethod
+  model: ${model}
+  dataloaders: ${dataloaders}
+  train_args: ${training}
+  val_args: ${evaluation}

@@ -1,0 +1,24 @@
+_target_: dataset.dataset_CHO.DataLoaders
+dataset_name: "CHO"
+data_root: "/home/zheyaogao/Experiments/ESD_seg/endoscapes"
+split_files:
+  train: "train_seg_vids.txt"
+  val: "val_seg_vids.txt"
+  test: "test_seg_vids.txt"
+frame_dirs:
+  - "train_seg"
+  - "train"
+  - "val_seg"
+  - "val"
+  - "test_seg"
+  - "test"
+mask_dir: "semseg"
+clip_len: 8
+clip_stride: 1
+transforms: 
+  _target_: dataset.dataset_CHO.prepare_transforms
+  image_size: [256, 256]
+batch_size: 2
+num_workers: 4
+num_classes: 7
+

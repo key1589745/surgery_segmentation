@@ -1,0 +1,17 @@
+_recursive_: False
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0006
+  weight_decay: 0.01
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  factor: 0.5
+  patience: 50
+  min_lr: 0.0
+  verbose: True
+
+epochs: 30

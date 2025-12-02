@@ -1,0 +1,8 @@
+val_interval: 1
+save_dir: checkpoints/
+
+evaluator:
+  _target_: evaluation.Evaluator
+  num_cls: 7
+  smooth: 1.0e-5
+
