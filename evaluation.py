@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+import time
 
 class Dice(object):
 
@@ -228,6 +229,10 @@ class Evaluator:
         metrics = EvaluationMetrics(num_cls=self.num_cls, smooth=self.smooth)
         model.eval()
         val_loss = 0
+        
+        start_time = time.time()
+        total_frames = 0
+        
         with torch.no_grad():
             for batch in dataloader:
                 # Handle possible key mismatch
@@ -240,12 +245,18 @@ class Evaluator:
                 target = batch['mask']
                 video_ids = batch.get('video_id', None)
                 frame_indices = batch.get('frame_idx', None)
+                
+                total_frames += data.shape[0]
 
                 outputs = model(data).detach().cpu()
                 # print(torch.unique(target))
-                val_loss += F.cross_entropy(outputs, target, ignore_index=255)
+                if validation:
+                    val_loss += F.cross_entropy(outputs, target, ignore_index=255)
                 
                 metrics.update(outputs, target, video_ids, frame_indices)
+        
+        end_time = time.time()
+        fps = total_frames / (end_time - start_time) if (end_time - start_time) > 0 else 0
         
         res = {
             'val_loss': val_loss,
@@ -255,7 +266,9 @@ class Evaluator:
             'TC_avg': metrics.temporal_consistency_avg(), 'TC_std': metrics.temporal_consistency_std(),
         }
         
-        
+        if not validation:
+            res['FPS'] = fps
+            
         return res
 
 

@@ -5,6 +5,7 @@ from torch.backends import cudnn
 from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, open_dict
+OmegaConf.register_new_resolver("eval", eval)
 import torch
 warnings.filterwarnings("ignore")
 

@@ -1,5 +1,5 @@
 _target_: models.vss_base.base_model
-model_name: "base_model"
+model_name: "model_l"
 image_encoder:
   _target_: models.encoder.SAM2_encoder
   checkpoint_path: sam2/checkpoints/sam2.1_hiera_large.pt
@@ -20,7 +20,7 @@ local_memory:
   local_filter:
     _target_: models.memory.LocalFilter
     similarity_metric: cosine
-    num_frames: 8
+    num_frames: ${eval:'${dataloaders.clip_len} // 2'}
   memory_attention:
     _target_: models.memory.MemoryAttention
     d_model: 256

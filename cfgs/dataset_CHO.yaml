@@ -13,7 +13,7 @@ frame_dirs:
   - "test_seg"
   - "test"
 mask_dir: "semseg"
-clip_len: 8
+clip_len: 16
 clip_stride: 1
 transforms: 
   _target_: dataset.dataset_CHO.prepare_transforms

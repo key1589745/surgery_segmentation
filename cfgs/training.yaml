@@ -14,4 +14,4 @@ scheduler:
   min_lr: 0.0
   verbose: True
 
-epochs: 30
+epochs: 100

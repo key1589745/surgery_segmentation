@@ -2,6 +2,8 @@ import torch
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
+import os
+import json
 
 class BaseMethod:
     def __init__(self, model, dataloaders, train_args, val_args):
@@ -72,6 +74,17 @@ class BaseMethod:
         self.model.eval()
         res = self.evaluator(self.model, self.test_loader, validation=False)
         print(res)
+
+        # Save test result to log file
+        os.makedirs(self.save_dir, exist_ok=True)
+        log_path = os.path.join(self.save_dir, f"test_results_{self.dataset_name}.json")
+        try:
+            with open(log_path, "a") as f:
+                json.dump(res, f)
+                f.write("\n")
+        except Exception as e:
+            # Fallback: at least show that logging failed, but don't crash evaluation
+            print(f"Warning: failed to write test log to {log_path}: {e}")
 
     def save_model(self):
         dataset_name = self.dataset_name

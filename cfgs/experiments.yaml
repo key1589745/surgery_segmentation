@@ -2,7 +2,7 @@ defaults:
   - training@training
   - evaluation@evaluation
   - model@model
-  - dataset_ESD@dataloaders
+  - dataset_CHO@dataloaders
   - _self_
 
 runner:
