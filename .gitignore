@@ -15,3 +15,5 @@ endoscapes/
 nbooks/
 sam2/
 compare_models.py
+evaluate_cho.py
+update_repo.sh
