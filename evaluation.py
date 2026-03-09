@@ -149,21 +149,6 @@ class EvaluationMetrics(object):
                     f1 = 1.0
                 self._f_scores[i-1].append(f1)
 
-                # Temporal Consistency
-                tc = np.nan
-                if vid is not None and fidx is not None:
-                    if vid in self.history:
-                        last_fidx, last_p = self.history[vid]
-                        if abs(fidx - last_fidx) == 1: # Consecutive frames
-                            last_p_mask = (last_p >= i) & valid_mask
-                            inter_tc = np.sum(p_mask & last_p_mask)
-                            union_tc = np.sum(p_mask | last_p_mask)
-                            tc = inter_tc / (union_tc + self.smooth)
-                            if union_tc == 0: tc = 1.0
-                    
-                if not np.isnan(tc):
-                    self._temporal_ious[i-1].append(tc)
-
                 # Class weight
                 w = np.sum(t_mask)
                 self.cls_weight[i-1].append(w)
@@ -219,19 +204,22 @@ class EvaluationMetrics(object):
     def temporal_consistency_std(self):
         return np.round(np.std([np.mean(d) for d in self._temporal_ious if len(d)>0]),4).item() if any(len(d)>0 for d in self._temporal_ious) else 0.0
 
+    def per_class_dice(self):
+        return [np.round(np.mean(d), 4).item() if len(d) > 0 else 0.0 for d in self._dices]
+
+    def per_class_f_score(self):
+        return [np.round(np.mean(d), 4).item() if len(d) > 0 else 0.0 for d in self._f_scores]
+
 
 class Evaluator:
     def __init__(self, num_cls=4, smooth=1e-5):
         self.num_cls = num_cls
         self.smooth = smooth
 
-    def __call__(self, model, dataloader, validation=True):
+    def __call__(self, model, dataloader, validation=True, return_details=False):
         metrics = EvaluationMetrics(num_cls=self.num_cls, smooth=self.smooth)
         model.eval()
         val_loss = 0
-        
-        start_time = time.time()
-        total_frames = 0
         
         with torch.no_grad():
             for batch in dataloader:
@@ -245,30 +233,49 @@ class Evaluator:
                 target = batch['mask']
                 video_ids = batch.get('video_id', None)
                 frame_indices = batch.get('frame_idx', None)
-                
-                total_frames += data.shape[0]
 
                 outputs = model(data).detach().cpu()
-                # print(torch.unique(target))
+
                 if validation:
                     val_loss += F.cross_entropy(outputs, target, ignore_index=255)
                 
                 metrics.update(outputs, target, video_ids, frame_indices)
-        
-        end_time = time.time()
-        fps = total_frames / (end_time - start_time) if (end_time - start_time) > 0 else 0
         
         res = {
             'val_loss': val_loss,
             'wDice_avg': metrics.wdice_avg(), 'wDice_std': metrics.wdice_std(),
             'mIoU_avg': metrics.jaccard_avg(), 'mIoU_std': metrics.jaccard_std(),
             'F1_avg': metrics.f_score_avg(), 'F1_std': metrics.f_score_std(),
-            'TC_avg': metrics.temporal_consistency_avg(), 'TC_std': metrics.temporal_consistency_std(),
+            'per_class_dice': metrics.per_class_dice(),
+            'per_class_f1': metrics.per_class_f_score(),
         }
         
         if not validation:
-            res['FPS'] = fps
+            # dataloader.batch_size = 1
+            fps = []
+            for batch in dataloader:
+                if 'image' in batch:
+                    data = batch['image']
+                elif 'video' in batch:
+                    data = batch['video']
+                
+                data = data.cuda()
+                x_curr, f_memo = model.get_memory_features(data)
+                
+                torch.cuda.synchronize()
+                start_time = time.time()
+                outputs = model.inference(x_curr, f_memo)
+                torch.cuda.synchronize()
+                end_time = time.time()
+                
+                batch_size = data.shape[0]
+                fps.append(batch_size / (end_time - start_time))
+
+            res['FPS_avg'] = np.round(np.mean(fps), 4).item()
+            res['FPS_std'] = np.round(np.std(fps), 4).item()
             
+        if return_details:
+            return res, metrics
         return res
 
 

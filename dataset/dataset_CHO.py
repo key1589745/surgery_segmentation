@@ -6,7 +6,6 @@ from typing import List, Sequence, Tuple
 import numpy as np
 from PIL import Image
 import torch
-from hydra import compose, initialize
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2
 from torchvision.transforms import functional as F

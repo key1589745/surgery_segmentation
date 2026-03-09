@@ -1,0 +1,29 @@
+======================================================================
+γ PARAMETER SENSITIVITY ANALYSIS SUMMARY
+======================================================================
+
+EXPERIMENT SETUP
+----------------------------------------
+Number of memory items: 10
+γ range tested: [-3.00, 20.00]
+Number of trials: 3
+Number of test frames: 10
+
+KEY FINDINGS
+----------------------------------------
+1. Optimal γ for segmentation: 0.200
+   • mIoU at optimal γ: 0.4943
+   • Improvement over γ=0: 77.8%
+
+2. Sensitivity Analysis:
+   • ANOVA p-value: 0.000000
+   • Significant differences: YES
+
+3. Recommended γ Ranges:
+   • High performance: [0.20, 0.40]
+
+4. Practical Recommendations:
+   • Default starting value: γ = 0.5
+   • Tuning range: [0, 2] for most tasks
+   • Use adaptive γ for dynamic scenes
+   • Validate per sequence for best results

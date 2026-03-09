@@ -18,7 +18,7 @@ clip_stride: 1
 transforms: 
   _target_: dataset.dataset_CHO.prepare_transforms
   image_size: [256, 256]
-batch_size: 2
+batch_size: 16
 num_workers: 4
 num_classes: 7
 

@@ -21,9 +21,25 @@ class BaseMethod:
         self.evaluator = val_args.evaluator
         self.val_interval = val_args.val_interval
         self.save_dir = val_args.save_dir
+        
+        # Check for checkpoint path in train_args
+        self.checkpoint_path = getattr(train_args, 'checkpoint_path', None)
 
  
     def train(self):
+        if self.checkpoint_path is not None:
+            if os.path.exists(self.checkpoint_path):
+                print(f"Loading pretrained model from {self.checkpoint_path}...")
+                # Load state dict
+                state_dict = torch.load(self.checkpoint_path, map_location='cpu')
+                # Handle potential key mismatches if model was saved with/without 'module.' prefix or different structure
+                # But assuming consistent save/load from this same runner:
+                self.model.load_state_dict(state_dict, strict=False)
+                print("Model loaded. Skipping training stage.")
+                return self.model
+            else:
+                print(f"Checkpoint path {self.checkpoint_path} provided but file not found. Starting training from scratch...")
+
         best_val_dice = 0
         best_val_loss = 10000
 

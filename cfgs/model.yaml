@@ -18,9 +18,10 @@ local_memory:
   in_dim: 1152
   mem_dim: 64
   local_filter:
-    _target_: models.memory.LocalFilter
+    _target_: models.memory.DPPFilter
     similarity_metric: cosine
-    num_frames: ${eval:'${dataloaders.clip_len} // 2'}
+    num_frames: 8
+    alpha: 0.5
   memory_attention:
     _target_: models.memory.MemoryAttention
     d_model: 256

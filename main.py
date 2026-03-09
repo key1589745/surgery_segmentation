@@ -10,11 +10,13 @@ import torch
 warnings.filterwarnings("ignore")
 
 
-def main(configs):
+def main(configs, overrides=None):
     
     # load dataset    
     with initialize(version_base=None, config_path=configs):
-        cfg = compose(config_name='experiments')
+        if overrides is None:
+            overrides = []
+        cfg = compose(config_name='experiments', overrides=overrides)
         OmegaConf.resolve(cfg)
         runner = instantiate(cfg.runner, _recursive_=True)
 
@@ -37,10 +39,11 @@ if __name__ == '__main__':
     parser.add_argument('--args', type=str, default='cfgs')
     parser.add_argument('--cuda', type=int, default=0)
 
-    CONFIGs = parser.parse_args()
+    CONFIGs, unknown_args = parser.parse_known_args()
     torch.cuda.set_device(CONFIGs.cuda)
     
     #os.environ["CUDA_VISIBLE_DEVICES"] = CONFIGs.cuda
     cudnn.benchmark = True
 
-    main(CONFIGs.args)
+    # Pass unknown args as overrides to Hydra
+    main(CONFIGs.args, overrides=unknown_args)

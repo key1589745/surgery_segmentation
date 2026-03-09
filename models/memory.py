@@ -224,13 +224,14 @@ class LocalMemoryModule(nn.Module):
         # f_curr: B x C x H x W; f_memo: B x (T-1) x C x H x W
         if isinstance(f_memo, list):
             f_memo = torch.stack(f_memo, dim=1)
-        f_memo = self.local_filter(f_curr, f_memo)
-        
+
+        with torch.no_grad():
+            f_memo = self.local_filter(f_curr.detach(), f_memo)
+            
         B, T, C, H, W = f_memo.shape
         f_memo = f_memo.reshape(B * T, C, H, W)
         f_memo = self.mem_proj(f_memo)
-        f_memo = f_memo.reshape(B, T, -1, H, W)
-        
+        f_memo = f_memo.view(B, T, -1, H, W)
         return self.attention(f_curr, f_memo)
         
 
@@ -268,11 +269,113 @@ class LocalFilter(nn.Module):
             sim = -torch.norm(curr_feat.unsqueeze(1) - memo_feat, p=2, dim=2)
 
         # Select topk most similar frames
-        _, idx = torch.topk(sim, k=self.n_frames, dim=1, largest=False) # B x k
+        _, idx = torch.topk(sim, k=self.n_frames, dim=1, largest=True) # B x k
         
         # Gather selected frames
         idx = idx.view(B, self.n_frames, 1, 1, 1).expand(B, self.n_frames, C, H, W)
         f_memo_selected = torch.gather(f_memo, 1, idx)
+        
+        return f_memo_selected
+
+class DPPFilter(nn.Module):
+    def __init__(self, similarity_metric, num_frames, alpha=1.0):
+        super(DPPFilter, self).__init__()
+        self.s_metric = similarity_metric
+        self.n_frames = num_frames
+        self.alpha = alpha
+
+    def forward(self, f_curr, f_memo):
+        """
+        Select num_frames most diverse and similar frames using efficient Greedy DPP.
+        Args:
+            f_curr: B x C x H x W
+            f_memo: B x (T-1) x C x H x W
+        Returns:
+            f_memo: B x num_frames x C x H x W
+        """
+        B, T, C, H, W = f_memo.shape
+        if T <= self.n_frames:
+            return f_memo
+
+        # Global Average Pooling
+        curr_feat = torch.mean(f_curr, dim=(2, 3)) # B x C
+        memo_feat = torch.mean(f_memo, dim=(3, 4)) # B x T x C
+        
+        # Normalize features for diversity kernel S = phi * phi^T
+        memo_feat_norm = F.normalize(memo_feat, p=2, dim=2) # B x T x C
+        curr_feat_norm = F.normalize(curr_feat, p=2, dim=1) # B x C
+        
+        # Calculate Quality Score: q_i = exp(alpha * sim(curr, memo_i))
+        if self.s_metric == 'cosine':
+            sim = torch.sum(curr_feat_norm.unsqueeze(1) * memo_feat_norm, dim=2) # B x T
+        else:
+            # Negative L2 distance, mapped to something positive
+            # dist = ||u - v||, sim = -dist
+            # We can use exp(-dist) directly
+            dist = torch.norm(curr_feat.unsqueeze(1) - memo_feat, p=2, dim=2)
+            sim = -dist
+            
+        quality = torch.exp(self.alpha * sim) # B x T
+        
+        # Weighted feature vectors: v_i = q_i * phi_i
+        # v: B x T x C
+        v = quality.unsqueeze(2) * memo_feat_norm
+        
+        # Efficient Greedy DPP selection (Kernelized OMP)
+        # Compute Kernel Matrix: K = v * v^T (B x T x T)
+        # Since T << C, this is efficient compared to iterating in C-dim
+        K = torch.bmm(v, v.transpose(1, 2))
+        
+        selected_indices = torch.zeros(B, self.n_frames, dtype=torch.long, device=v.device)
+        mask = torch.ones(B, T, dtype=torch.bool, device=v.device)
+        
+        # We modify K in place to track Schur complement updates
+        current_K = K
+        
+        for k in range(self.n_frames):
+            # Get diagonal: B x T
+            diag = torch.diagonal(current_K, dim1=1, dim2=2)
+            
+            # Mask out already selected
+            diag_masked = diag.clone()
+            diag_masked[~mask] = -float('inf')
+            
+            # Select max variance
+            values, best_idx = torch.max(diag_masked, dim=1) # B
+            selected_indices[:, k] = best_idx
+            
+            # Mark as selected
+            mask.scatter_(1, best_idx.unsqueeze(1), False)
+            
+            if k < self.n_frames - 1:
+                # Update K using Schur complement
+                # We need the column corresponding to the selected index
+                # c = K[:, :, best_idx]
+                idx_expanded = best_idx.view(B, 1, 1).expand(B, T, 1)
+                c = torch.gather(current_K, 2, idx_expanded).squeeze(2) # B x T
+                
+                d = values.view(B, 1, 1) # B x 1 x 1
+                
+                # Update: K = K - c * c^T / d
+                update = torch.bmm(c.unsqueeze(2), c.unsqueeze(1)) / (d + 1e-6)
+                current_K = current_K - update
+            
+        # Gather selected frames
+        # Sort indices to maintain temporal order? 
+        # Usually memory order might matter for positional encoding or attention, 
+        # but here LocalMemory just concatenates?
+        # LocalMemoryModule: f_memo = f_memo.view(B * T, C, H, W) -> view(B, T, -1, H, W)
+        # Then attention(f_curr, f_memo).
+        # Attention might expect sorted if it uses positional encoding?
+        # MemoryAttention (line 367) flattens memory.
+        # If there are positional encodings, order matters.
+        # Sam2 memory attention might not use explicit relative position for memory items, 
+        # but let's sort indices just in case to preserve temporal order.
+        
+        selected_indices, _ = torch.sort(selected_indices, dim=1)
+        
+        gather_idx = selected_indices.view(B, self.n_frames, 1, 1, 1).expand(B, self.n_frames, C, H, W)
+        f_memo_selected = torch.gather(f_memo, 1, gather_idx)
         
         return f_memo_selected
 
@@ -412,7 +515,7 @@ class MemoryAttention(nn.Module):
 #             memory_values (Tensor): memory values tensor, shape: TxBxCxHxW
 #             query_key (Tensor): query keys tensor, shape: BxCxHxW
 #             query_value (Tensor): query values tensor, shape: BxCxHxW
-
+#
 #         Returns:
 #             Concat query and memory tensor.
 #         """
@@ -421,19 +524,19 @@ class MemoryAttention(nn.Module):
 #         assert query_key.shape[1] == key_channels and query_value.shape[1] == value_channels
 #         memory_keys = memory_keys.permute(1, 2, 0, 3, 4).contiguous()  # BxCxTxHxW
 #         memory_keys = memory_keys.view(batch_size, key_channels, sequence_num * height * width)  # BxCxT*H*W
-
+#
 #         query_key = query_key.view(batch_size, key_channels, height * width).permute(0, 2, 1).contiguous()  # BxH*WxCk
 #         key_attention = torch.bmm(query_key, memory_keys)  # BxH*WxT*H*W
 #         if self.matmul_norm:
 #             key_attention = (key_channels ** -.5) * key_attention
 #         key_attention = F.softmax(key_attention, dim=-1)  # BxH*WxT*H*W
-
+#
 #         memory_values = memory_values.permute(1, 2, 0, 3, 4).contiguous()  # BxCxTxHxW
 #         memory_values = memory_values.view(batch_size, value_channels, sequence_num * height * width)
 #         memory_values = memory_values.permute(0, 2, 1).contiguous()  # BxT*H*WxC
 #         memory = torch.bmm(key_attention, memory_values)  # BxH*WxC
 #         memory = memory.permute(0, 2, 1).contiguous()  # BxCxH*W
 #         memory = memory.view(batch_size, value_channels, height, width)  # BxCxHxW
-
+#
 #         query_memory = torch.cat([query_value, memory], dim=1)
 #         return query_memory

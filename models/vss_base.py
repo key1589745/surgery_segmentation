@@ -14,19 +14,20 @@ class base_model(nn.Module):
         self.loss = loss
 
     def forward(self, x, mask=None):
-        kld = torch.tensor(0.0, device=x.device)
+
         if len(x.shape) < 5:
             f_curr = self.encoder(x)
         else:
             x = x.transpose(0,1)
             x_curr, x_memo = x[0], x[1:]
             f_curr = self.encoder(x_curr)
+
             f_memo = []
             for x in x_memo:
                 with torch.no_grad():
                     f = self.encoder(x)
                     f_memo.append(f[-1].detach())
-                
+                    
             f_curr[-1] = self.local_memory(f_curr[-1], f_memo)
             
             if self.training:
@@ -39,6 +40,33 @@ class base_model(nn.Module):
             return (mask_pred, kld)
         else:  
             return mask_pred
+
+    def inference(self, x, f_memo):
+        f_curr = self.encoder(x)
+        if f_memo is not None and len(f_memo) > 0:
+            f_curr[-1] = self.local_memory(f_curr[-1], f_memo)
+            
+        f_curr[-1] = self.global_memory(f_curr[-1], None)
+        mask_pred = self.decoder(f_curr)
+        return mask_pred
+
+    def get_memory_features(self, x):
+        """
+        Compute memory features for frames in the batch that can serve as memory.
+        This assumes the batch contains clips or frames that are part of a sequence.
+        """
+ 
+        if len(x.shape) == 5: # (B, T, C, H, W)
+            x = x.transpose(0, 1)
+            x_curr, x_memo = x[0], x[1:]
+        
+        f_memo = []
+        for x in x_memo:
+            with torch.no_grad():
+                features = self.encoder(x)
+                f_memo.append(features[-1].detach())
+            
+        return x_curr, f_memo
 
 
 
