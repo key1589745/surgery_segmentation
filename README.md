@@ -12,7 +12,7 @@ This repository implements a temporal memory enhancement framework for surgical 
 
 Please see the method overview figure in:
 
-- [`framework`](figs/framework.png)
+![Framework overview](figs/framework.png)
 
 ## Main Results (from paper)
 
@@ -24,7 +24,7 @@ On both CHO and ESD datasets, the proposed method improves mIoU / F-score / wDic
 
 For qualitative and analysis figures used in this project, you can also check:
 
-- [`main results`](vis_results/perclass_combined_radars.png)
+![Per-class combined radar results](figs/perclass_combined_radars.png)
 
 ## Repository Structure
 
