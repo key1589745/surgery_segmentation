@@ -1,8 +1,7 @@
 # Temporal Memory Enhancement for Semantic Segmentation in Surgical Video
 
 Official code repository for the **MIDL 2026 Oral** paper:
-**Temporal Memory Enhancement for Semantic Segmentation in Surgical Video**.  
-Paper: [OpenReview PDF](https://openreview.net/pdf?id=arGD0IznGt)
+[Temporal Memory Enhancement for Semantic Segmentation in Surgical Video](https://openreview.net/pdf?id=arGD0IznGt)
 
 ## Overview
 
@@ -13,7 +12,7 @@ This repository implements a temporal memory enhancement framework for surgical 
 
 Please see the method overview figure in:
 
-- [`framework.pdf`](framework.pdf)
+- [`framework`](figs/framework.png)
 
 ## Main Results (from paper)
 
@@ -25,9 +24,7 @@ On both CHO and ESD datasets, the proposed method improves mIoU / F-score / wDic
 
 For qualitative and analysis figures used in this project, you can also check:
 
-- `model_comparison.png`
-- `vis_results/perclass_combined_radars.pdf`
-- `CHO_memory.pdf`, `ESD_memory.pdf`
+- [`main results`](vis_results/perclass_combined_radars.png)
 
 ## Repository Structure
 
